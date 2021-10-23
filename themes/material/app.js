@@ -19,6 +19,14 @@ function init(){
     $('body').html(html);
 }
 
+const Os = {
+  isWindows: navigator.platform.toUpperCase().indexOf('WIN') > -1, // .includes
+  isMac: navigator.platform.toUpperCase().indexOf('MAC') > -1,
+  isMacLike: /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform),
+  isIos: /(iPhone|iPod|iPad)/i.test(navigator.platform),
+  isMobile: /Android|webOS|iPhone|iPad|iPod|iOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+};
+
 function render(path){
 	if(path.indexOf("?") > 0){
 		path = path.substr(0,path.indexOf("?"));
@@ -34,31 +42,90 @@ function render(path){
 
 
 // 渲染 title
-function title(path){
-    path = decodeURI(path);
-    $('title').html(document.siteName+' - '+path);
+function title(path) {
+  path = decodeURI(path);
+  var cur = window.current_drive_order || 0;
+  var drive_name = window.drive_names[cur];
+  path = path.replace(`/${cur}:`, '');
+  // $('title').html(document.siteName + ' - ' + path);
+  var model = window.MODEL;
+  if (model.is_search_page)
+    $('title').html(`${document.siteName} - ${drive_name} - Search Result for ${model.q} `);
+  else
+    $('title').html(`${document.siteName} - ${drive_name} - ${path}`);
 }
 
 // 渲染导航栏
-function nav(path){
-    var html = "";
-    html += `<a href="/" class="mdui-typo-headline folder">${document.siteName}</a>`;
+function nav(path) {
+  var model = window.MODEL;
+  var html = "";
+  var cur = window.current_drive_order || 0;
+  html += `<a href="/${cur}:/" class="mdui-typo-headline folder">${document.siteName}</a>`;
+  var names = window.drive_names;
+  /*html += `<button class="mdui-btn mdui-btn-raised" mdui-menu="{target: '#drive-names'}"><i class="mdui-icon mdui-icon-left material-icons">share</i> ${names[cur]}</button>`;
+  html += `<ul class="mdui-menu" id="drive-names" style="transform-origin: 0px 0px; position: fixed;">`;
+  names.forEach((name, idx) => {
+      html += `<li class="mdui-menu-item ${(idx === cur) ? 'mdui-list-item-active' : ''} "><a href="/${idx}:/" class="mdui-ripple">${name}</a></li>`;
+  });
+  html += `</ul>`;*/
+
+// change into select
+  html += `<select class="mdui-select" onchange="window.location.href=this.value" mdui-select style="overflow:visible;padding-left:8px;padding-right:8px">`;
+  names.forEach((name, idx) => {
+    html += `<option value="/${idx}:/"  ${idx === cur ? 'selected="selected"' : ''} >${name}</option>`;
+  });
+  html += `</select>`;
+
+  if (!model.is_search_page) {
     var arr = path.trim('/').split('/');
     var p = '/';
-    if(arr.length > 0){
-        for(i in arr){
-            var n = arr[i];
-            n = decodeURI(n);
-            p += n+'/';
-            if(n == ''){
-                break;
-            }
-            html += `<i class="mdui-icon material-icons mdui-icon-dark folder" style="margin:0;">chevron_right</i><a class="folder" href="${p}">${n}</a>`;
+    if (arr.length > 1) {
+      arr.shift();
+      for (i in arr) {
+        var n = arr[i];
+        n = decodeURI(n);
+        p += n + '/';
+        if (n == '') {
+          break;
         }
+        html += `<i class="mdui-icon material-icons mdui-icon-dark folder" style="margin:0;">chevron_right</i><a class="folder" href="/${cur}:${p}">${n}</a>`;
+      }
     }
-    $('#nav').html(html);
-}
+  }	
+	
+ var search_text = model.is_search_page ? (model.q || '') : '';
+  const isMobile = Os.isMobile;
+  var search_bar = `<div class="mdui-toolbar-spacer"></div>
+        <div id="search_bar" class="mdui-textfield mdui-textfield-expandable mdui-float-right ${model.is_search_page ? 'mdui-textfield-expanded' : ''}" style="max-width:${isMobile ? 300 : 400}px">
+            <button class="mdui-textfield-icon mdui-btn mdui-btn-icon" onclick="if($('#search_bar').hasClass('mdui-textfield-expanded') && $('#search_bar_form>input').val()) $('#search_bar_form').submit();">
+                <i class="mdui-icon material-icons">search</i>
+            </button>
+            <form id="search_bar_form" method="get" action="/${cur}:search">
+            <input class="mdui-textfield-input mdui-text-color-white-text" type="text" name="q" placeholder="Search in current drive" value="${search_text}"/>
+            </form>
+            <button class="mdui-textfield-close mdui-btn mdui-btn-icon"><i class="mdui-icon material-icons">close</i></button>
+        </div>`;	
 
+/**
+ * Search POST request
+ * @param params Form params
+ * @param resultCallback Success callback
+ */
+function requestSearch(params, resultCallback) {
+  var p = {
+    q: params['q'] || null,
+    page_token: params['page_token'] || null,
+    page_index: params['page_index'] || 0
+  };
+  $.post(`/${window.current_drive_order}:search`, p, function (data, status) {
+    var res = jQuery.parseJSON(data);
+    if (res && res.data) {
+      if (resultCallback) resultCallback(res, p)
+    }
+  })
+}
+	
+	
 // 渲染文件列表
 function list(path){
 	var content = `
@@ -85,41 +152,123 @@ function list(path){
 	 </div>
 	 <div id="readme_md" class="mdui-typo" style="display:none; padding: 20px 0;"></div>
 	`;
-	$('#content').html(content);
-	
-    var password = localStorage.getItem('password'+path);
-    $('#list').html(`<div class="mdui-progress"><div class="mdui-progress-indeterminate"></div></div>`);
-    $('#readme_md').hide().html('');
-    $('#head_md').hide().html('');
-    $.post(path,'{"password":"'+password+'"}', function(data,status){
-        var obj = jQuery.parseJSON(data);
-        if(typeof obj != 'null' && obj.hasOwnProperty('error') && obj.error.code == '401'){
-            var pass = prompt("password","");
-            localStorage.setItem('password'+path, pass);
-            if(pass != null && pass != ""){
-                list(path);
-            }else{
-                history.go(-1);
+ $('#content').html(content);
+
+  var password = localStorage.getItem('password' + path);
+  $('#list').html(`<div class="mdui-progress"><div class="mdui-progress-indeterminate"></div></div>`);
+  $('#readme_md').hide().html('');
+  $('#head_md').hide().html('');
+
+  /**
+   * Callback after successful data return from column directory request
+   * @param res Returned result (object)
+   * @param path Requested path
+   * @param prevReqParams Parameters used in the request
+   */
+  function successResultCallback(res, path, prevReqParams) {
+
+    // Temporarily store nextPageToken and currentPageIndex in the list element
+    $('#list')
+      .data('nextPageToken', res['nextPageToken'])
+      .data('curPageIndex', res['curPageIndex']);
+
+    // Remove loading spinner
+    $('#spinner').remove();
+
+    if (res['nextPageToken'] === null) {
+      // If it is the last page, unbind the scroll event, reset scroll_status, and append data
+      $(window).off('scroll');
+      window.scroll_status.event_bound = false;
+      window.scroll_status.loading_lock = false;
+      append_files_to_list(path, res['data']['files']);
+    } else {
+      // If it is not the last page, append data and bind the scroll event (if not already bound), update scroll_status
+      append_files_to_list(path, res['data']['files']);
+      if (window.scroll_status.event_bound !== true) {
+        // Bind event, if not yet bound
+        $(window).on('scroll', function () {
+          var scrollTop = $(this).scrollTop();
+          var scrollHeight = getDocumentHeight();
+          var windowHeight = $(this).height();
+          // Roll to the bottom
+          if (scrollTop + windowHeight > scrollHeight - (Os.isMobile ? 130 : 80)) {
+            /*
+            When the event of scrolling to the bottom is triggered, if it is already loading at this time, the event is ignored;
+            Otherwise, go to loading and occupy the loading lock, indicating that loading is in progress
+             */
+            if (window.scroll_status.loading_lock === true) {
+              return;
             }
-        }else if(typeof obj != 'null'){
-            list_files(path,obj.files);
-        }
+            window.scroll_status.loading_lock = true;
+
+            // Show one loading spinner
+            $(`<div id="spinner" class="mdui-spinner mdui-spinner-colorful mdui-center"></div>`)
+              .insertBefore('#readme_md');
+            mdui.updateSpinners();
+            // mdui.mutation();
+
+            let $list = $('#list');
+            requestListPath(path, {
+                password: prevReqParams['password'],
+                page_token: $list.data('nextPageToken'),
+                // Request next page
+                page_index: $list.data('curPageIndex') + 1
+              },
+              successResultCallback,
+              // The password is the same as before. Will not appear authError
+              null
+            )
+          }
+        });
+        window.scroll_status.event_bound = true
+      }
+    }
+
+    // After loading successfully and rendering new data successfully, release the loading lock so that you can continue to process the "scroll to bottom" event
+    if (window.scroll_status.loading_lock === true) {
+      window.scroll_status.loading_lock = false
+    }
+  }
+
+  // Start requesting data from page 1
+  requestListPath(path, {password: password},
+    successResultCallback,
+    function (path) {
+      $('#spinner').remove();
+      var pass = prompt("Access Denied, please enter the password", "");
+      localStorage.setItem('password' + path, pass);
+      if (pass != null && pass != "") {
+        list(path);
+      } else {
+        history.go(-1);
+      }
     });
 }
 
-function list_files(path,files){
-    html = "";
-    for(i in files){
-        var item = files[i];
-        var p = path+item.name+'/';
-        if(item['size']==undefined){
-            item['size'] = "";
-        }
+/**
+ * Append the data of the new page requested to the list
+ * @param path path
+ * @param files Requested results
+ */
+function append_files_to_list(path, files) {
+  var $list = $('#list');
+  // Is it the last page of data?
+  var is_lastpage_loaded = null === $list.data('nextPageToken');
+  var is_firstpage = '0' == $list.data('curPageIndex');
 
-        item['modifiedTime'] = utc2beijing(item['modifiedTime']);
-        item['size'] = formatFileSize(item['size']);
-        if(item['mimeType'] == 'application/vnd.google-apps.folder'){
-            html +=`<li class="mdui-list-item mdui-ripple"><a href="${p}" class="folder">
+  html = "";
+  let targetFiles = [];
+  for (i in files) {
+    var item = files[i];
+    var p = path + item.name + '/';
+    if (item['size'] == undefined) {
+      item['size'] = "";
+    }
+
+    item['modifiedTime'] = utc2beijing(item['modifiedTime']);
+    item['size'] = formatFileSize(item['size']);
+    if (item['mimeType'] == 'application/vnd.google-apps.folder') {
+      html += `<li class="mdui-list-item mdui-ripple"><a href="${p}" class="folder">
 	            <div class="mdui-col-xs-12 mdui-col-sm-7 mdui-text-truncate">
 	            <i class="mdui-icon material-icons">folder_open</i>
 	              ${item.name}
@@ -128,19 +277,21 @@ function list_files(path,files){
 	            <div class="mdui-col-sm-2 mdui-text-right">${item['size']}</div>
 	            </a>
 	        </li>`;
-        }else{
-            var p = path+item.name;
-            var c = "file";
-            if(item.name == "README.md"){
-                 get_file(p, item, function(data){
-                    markdown("#readme_md",data);
-                });
-            }
-            if(item.name == "HEAD.md"){
-	            get_file(p, item, function(data){
-                    markdown("#head_md",data);
-                });
-            }
+    } else {
+      var p = path + item.name;
+      const filepath = path + item.name;
+      var c = "file";
+      // README is displayed after the last page is loaded, otherwise it will affect the scroll event
+      if (is_lastpage_loaded && item.name == "README.md") {
+        get_file(p, item, function (data) {
+          markdown("#readme_md", data);
+        });
+      }
+      if (item.name == "HEAD.md") {
+        get_file(p, item, function (data) {
+          markdown("#head_md", data);
+        });
+      }
             var ext = p.split('.').pop();
             html += `<li class="mdui-list-item file mdui-ripple" target="_blank"><a gd-type="${item.mimeType}" href="${p}" class="${c}">
 	          <div class="mdui-col-xs-12 mdui-col-sm-7 mdui-text-truncate">
