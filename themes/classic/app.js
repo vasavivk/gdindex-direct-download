@@ -4,7 +4,7 @@ function init(){
     document.siteName = $('title').html();
     $('body').addClass("mdui-theme-primary-blue-grey mdui-theme-accent-blue");
     var html = `
-<h1 id="heading">Index of <?php echo urldecode($path);?></h1>
+<h1 id="heading">/ <?php echo urldecode($path);?></h1>
 <table id="table">
 </table>
 	`;
@@ -40,7 +40,7 @@ function nav(path){
 // 渲染文件列表
 function list(path){
 	var content = `
-<tr><th class="file-name">Name</th><th class="file-size">Size</th><th class="file-date-modified">Date Modified</th></tr>
+<tr><th class="file-name">Name</th><th class="file-size">Size</th></tr>
 	`;
 
 	if(path != '/'){
@@ -83,7 +83,7 @@ function list_files(path,files){
         if(item['size']==undefined){
             item['size'] = "";
         }
-        item['modifiedTime'] = utc2beijing(item['modifiedTime']);
+       
         item['size'] = formatFileSize(item['size']);
         if(item['mimeType'] == 'application/vnd.google-apps.folder'){
         	var p = path+item.name+'/';
@@ -91,7 +91,7 @@ function list_files(path,files){
 				<tr>
 					<td class="file-name"><a class="icon icon-dir folder" href="${p}">${item.name}/</a></td>
 					<td class="file-size">${item['size']}</td>
-					<td class="file-date-modified">${item['modifiedTime']}</td>
+					
 				</tr>
             `;
         }else{
@@ -100,7 +100,7 @@ function list_files(path,files){
 				<tr>
 					<td class="file-name"><a class="icon icon-file" href="${p}">${item.name}</a></td>
 					<td class="file-size">${item['size']}</td>
-					<td class="file-date-modified">${item['modifiedTime']}</td>
+					<td clas
 				</tr>
             `;
         }
@@ -108,45 +108,23 @@ function list_files(path,files){
     $('#table').append(html);
 }
 
-//时间转换
-function utc2beijing(utc_datetime) {
-    // 转为正常的时间格式 年-月-日 时:分:秒
-    var T_pos = utc_datetime.indexOf('T');
-    var Z_pos = utc_datetime.indexOf('Z');
-    var year_month_day = utc_datetime.substr(0,T_pos);
-    var hour_minute_second = utc_datetime.substr(T_pos+1,Z_pos-T_pos-1);
-    var new_datetime = year_month_day+" "+hour_minute_second; // 2017-03-31 08:02:06
 
-    // 处理成为时间戳
-    timestamp = new Date(Date.parse(new_datetime));
-    timestamp = timestamp.getTime();
-    timestamp = timestamp/1000;
-
-    // 增加8个小时，北京时间比utc时间多八个时区
-    var unixtimestamp = timestamp+8*60*60;
-
-    // 时间戳转为时间
-    var unixtimestamp = new Date(unixtimestamp*1000);
-    var year = 1900 + unixtimestamp.getYear();
-    var month = "0" + (unixtimestamp.getMonth() + 1);
-    var date = "0" + unixtimestamp.getDate();
-    var hour = "0" + unixtimestamp.getHours();
-    var minute = "0" + unixtimestamp.getMinutes();
-    var second = "0" + unixtimestamp.getSeconds();
-    return year + "-" + month.substring(month.length-2, month.length)  + "-" + date.substring(date.length-2, date.length)
-        + " " + hour.substring(hour.length-2, hour.length) + ":"
-        + minute.substring(minute.length-2, minute.length) + ":"
-        + second.substring(second.length-2, second.length);
-}
 
 // bytes自适应转换到KB,MB,GB
 function formatFileSize(bytes) {
-    if (bytes>=1000000000) {bytes=(bytes/1000000000).toFixed(2)+' GB';}
-    else if (bytes>=1000000)    {bytes=(bytes/1000000).toFixed(2)+' MB';}
-    else if (bytes>=1000)       {bytes=(bytes/1000).toFixed(2)+' KB';}
-    else if (bytes>1)           {bytes=bytes+' bytes';}
-    else if (bytes==1)          {bytes=bytes+' byte';}
-    else                        {bytes='';}
+    if (bytes >= 1073741824) {
+        bytes = (bytes / 1073741824).toFixed(2) + ' GB';
+    } else if (bytes >= 1048576) {
+        bytes = (bytes / 1048576).toFixed(2) + ' MB';
+    } else if (bytes >= 1024) {
+        bytes = (bytes / 1024).toFixed(2) + ' KB';
+    } else if (bytes > 1) {
+        bytes = bytes + ' bytes';
+    } else if (bytes == 1) {
+        bytes = bytes + ' byte';
+    } else {
+        bytes = '';
+    }
     return bytes;
 }
 
