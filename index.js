@@ -127,7 +127,16 @@ class googleDrive {
       let url = `https://www.googleapis.com/drive/v3/files/${id}?alt=media`;
       let requestOption = await this.requestOption();
       requestOption.headers['Range'] = range;
-      return await fetch(url, requestOption);
+       let res;
+         for (let i = 0; i < 3; i++) {
+             res = await fetch(url, requestOption);
+             if (res.status === 200) {
+                 break;
+             }
+             await this.sleep(800 * (i + 1));
+             console.log(res);
+         }
+
     }
 
     async file(path){
